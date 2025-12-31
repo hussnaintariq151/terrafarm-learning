@@ -1,0 +1,135 @@
+
+
+Core Intuition
+Imagine you are building an application infrastructure on AWS.
+
+            VPC = Your private network (like a house)
+            Subnets = Sections inside that network (rooms)
+            Public Subnet = Rooms with doors facing the street
+            Private Subnet = Rooms only accessible from inside the house
+
+            Terraform’s job is to define this whole setup as code and create it automatically.
+
+What is a VPC?
+
+VPC (Virtual Private Cloud) is an isolated network in AWS.
+
+Inside a VPC, you control:
+
+                IP ranges
+                Subnets
+                Routing
+                Security boundaries
+
+In Terraform, a VPC usually contains:
+
+                    Subnets
+                    Internet Gateway
+                    Route Tables
+                    NAT Gateway (for private subnets)
+
+What is a Subnet?
+                    A Subnet is a smaller network inside a VPC.
+
+Each subnet:
+                    Has its own IP range
+                    Belongs to one Availability Zone
+                    Can be public or private
+
+Public Subnet (What & Why)
+
+A Public Subnet:
+
+                    Has a route to the Internet Gateway
+                    Can assign public IPs to EC2 instances
+
+Result:
+
+                    EC2 can be accessed from the internet
+                    You can open a browser from home and hit the server
+
+Terraform logic:                0.0.0.0/0 → Internet Gateway
+
+This is why some juniors often use default VPC + public subnet: Easy testing & Simple learning
+
+Why Public Subnets Are Dangerous in Production
+
+In real life:
+                    Hackers constantly scan public IPs
+                    They look for:
+                            Open ports
+                            Weak security groups
+
+If even one port is accidentally exposed: ❌ Your server can be compromised
+
+                That’s why: Running application servers in public subnets is risky
+
+
+----------------------------------------
+
+Private Subnet (What & Why)
+
+A Private Subnet: Has NO direct route to the internet
+
+        EC2 has no public IP
+        Accessible only inside the VPC
+
+Used for:
+            Backend services
+            Databases
+            Internal APIs
+
+This dramatically improves security 🔐
+
+-------------------------------------------------------------------------
+
+How Do Private Servers Access the Internet?
+
+Very common interview question.
+
+Solution 1: NAT Gateway
+                    Placed in a public subnet
+                    Allows outbound internet access only
+Private EC2:
+                    ✅ Can download updates
+                    ❌ Cannot be accessed from the internet
+
+                    Internet
+                        |
+                        |
+                +----------------+
+                | Internet GW    |
+                +----------------+
+                        |
+            --------------------------------
+            |                              |
+     Public Subnet                  Public Subnet
+   (AZ-1)                            (AZ-2)
+            |                              |
+     +-------------+               +-------------+
+     | LoadBalancer|               | LoadBalancer|
+     +-------------+               +-------------+
+            |
+     +-------------+
+     | NAT Gateway |
+     +-------------+
+            |
+    ---------------------------------------
+    |                                     |
+ Private Subnet                       Private Subnet
+ (AZ-1)                               (AZ-2)
+    |                                     |
++-----------+                       +-----------+
+| Backend   |                       | Backend   |
+| API EC2   |                       | API EC2   |
++-----------+                       +-----------+
+    |
++-----------+
+| Database  |
+| (RDS)     |
++-----------+
+
+
+Public subnets expose traffic to the internet,
+private subnets protect application logic and data.
+Terraform helps us enforce this architecture as code.

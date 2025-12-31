@@ -91,7 +91,6 @@ we pass the data to EC2 instance through two way:
                         variable "server_port" {
                             description = "Port used for HTTP requests"
                             type        = number
-                            default     = 8080
                         }
 
         After that:    updated where server_port is used
@@ -108,6 +107,178 @@ we pass the data to EC2 instance through two way:
                                 
     In user_data:
     nohup python3 -m http.server 8080 ----------->  nohup python3 -m http.server ${var.server_port}  
+
+Ways to define the variable value:
+                                    1. terraform plan -var "server_port=8080"
+                                    2. export TF_VAR_server_port = 8080
+                                        terra plan
+                                    3. default value setup in variable: 
+
+                                    variable "server_port" {
+                                        description = "Port used for HTTP requests"
+                                        type        = number
+                                        default     = 8080
+                                    }
+
+---------------------------------------------------------------------------
+16 Terraform allows us to define output variable by following syntax
+            output "<NAME>" {                 <NAME> is the name of output variable 
+                value = <VALUE>               <VALUE> terraform expression you would like to define output vaiables               
+                [CONFIG ..]
+            }
+
+            terraform output  -----> list all outputs by running this command 
+            terraform output <OUTPUT_NAME> to see the value of a specific output 
+
+-----------------------------------------------------------------------------
+
+17 Deploying a Cluster of Web Server 
+
+A single server is good start but it lead to crash if it becomes over-loaded from too much traffic
+The solution is run a cluster of servers 
+            Managing such a cluster is a lot of work but we automate it through ASG (Auto Scaling Group)
+            ASG takes care a lot of tasks
+                                launching a cluster of EC2 instance
+                                Monitoring the health of each instance 
+                                Replacing failed instance 
+                                Adjusting the size of cluster in response to load 
+
+-----------------------
+To create ASG (Auto Scaling Group) , at first we create a launch configuration resource, which specifies how to configure 
+each EC2 instance in the ASG
+
+                            Replace aws_instance with aws_launch_configuration
+                aws_launch_configuration doesn't support tags; handle later through Auto Scaling group 
+                aws_launch_configuration doesn't support user_data_replace_on_change = true ; ASG launch new instances by default
+                IN aws_launch_configuration , two parameters have dfferent names
+                                ami becomes image_id
+                                vpc_security_group_ids becomes security_groups      
+
+
+
+        For One server: aws_instance
+        For cluster of servers: aws_launch_configuration lead to AUto scaling group
+
+        ASG have a reference or use it to fill the launch configuration, it lead to problem : launch configuration are immutable 
+        So if we change any parameter of launch configuration, Terraform will try to replace it but because of refernce of old resource , Terraform won't be able to delete it 
+        To solve this problem , you use a lifecycle setting---- it configures how the that resource is created, updated and deleted 
+
+                            create_before_destroy = true
+            
+
+    resource aws_autoscaling_group "example" {
+    launch_cofiguration = aws_launch_cofiguration.example.name
+
+    min_size       = 2
+    max_size       = 10
+
+    tag {
+        key                  = "None"
+        value                = "terraform-asg-example"
+        propagate_at_launch  =  true
+        }
+    
+    lifecycle {
+        create_before_destroy = true
+        }
+    }
+------------------------------------------------------------------------------
+
+Also add subnet_ids to your ASG to make it work to ensure thatt your servce keep runnng even some of 
+datacenters are an outage.
+We could hardcode the list of subnets but better way using data source
+
+                                            Data source
+        It is a piece of read only information that is fetched from the provider 
+        Adding a data source in Terraform configuration doesn't create anything new, it's just a way to query the 
+        Provider's APIs for data and make that data available to the rest of your Terraform code 
+        FOR example
+        AWS Provder Includes data sources to look up VPC data, subnet data, AMI IDs, IP address ranges,
+        current user  identity, and much more.
+
+            data "<PROVIDER>_<TYPE>" "<NAME>" {
+                [CONFIG ...]
+            }
+
+            Provider = aws
+            Type = Type of data source you want ; For subnet_ids, ---- vpc
+            NAME = Identifier to refer to this data source
+            CONFIG = arguements
+
+            data "aws_vpc" "default" {
+                default = true  -----> drects Terraform to look up Default VPC (VPC = Virtual Private Cloud) In your AWS account
+            }
+
+
+            To get data out of a data source:           data.<PROVIDER>_<TYPE>.<NAME>.<ATTRIBUTE>
+            To get ID of VPC:                           data. aws_vpc.default.id
+
+
+            data "aws_vpc" "default" {
+                filter {
+                    name   = "vpc-id"
+                    values = [data. aws_vpc.default.id]
+                }
+            }
+
+Ater that, tell your ASG, to use these subnets , via vpc_zone_identifier
+
+
+
+    resource aws_autoscaling_group "example" {
+    launch_cofiguration = aws_launch_cofiguration.example.name
+    vpc_zone_identifier = data.aws_subnets.default.ids          <--------------------------
+
+    min_size       = 2
+    max_size       = 10
+
+    tag {
+        key                  = "None"
+        value                = "terraform-asg-example"
+        propagate_at_launch  =  true
+        }
+    
+    lifecycle {
+        create_before_destroy = true
+        }
+    }
+
+
+When I Execute it raise error: because of deprecation of aws_launch_configuration
+        it changes to aws_launch_template 
+        
+        Also mplementing the changes in aws_autoscaling_group
+                                                            launch_template {
+                                                            id      = aws_launch_template.example.id
+                                                            version = "$Latest"
+                                                        }
+------------------------------------------------------------------------------------------------
+
+
+Deploying a load balancer
+
+Changes in main.tf
+
+resource "aws_security_group" "instance" {
+    name = "terraform-example-instance"
+    vpc_id = data.aws_vpc.default.id
+
+    ingress {
+        from_port   = var.server_port
+        to_port     = var.server_port
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+        }
+      egress {                           < --------------------
+        from_port   = 0                  < --------------------
+        to_port     = 0                  < --------------------
+        protocol    = "-1"               < --------------------
+        cidr_blocks = ["0.0.0.0/0"]      < --------------------
+        }
+    } 
+
+
+
 
 
 
