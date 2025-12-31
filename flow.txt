@@ -79,11 +79,35 @@ we pass the data to EC2 instance through two way:
 
         Terraform herodoc syntax which allows to create multilingual strings without insert /n character all over the place
 
-        Te user_data_replace_on_change parameter s set to true so when you change the user_data parameter and run terraform apply,
+        The user_data_replace_on_change parameter s set to true so when you change the user_data parameter and run terraform apply,
         Terraform wll termnate the orgnal instance and launch a totally newone.
 
-        
+14 Access the server via         
+                               curl http://<EC2_PUBLIC_IP>:8080
+                               curl http://3.17.174.124:8080 
 
+15 Since main.tf violate the code DRY principle 
+        so we make 
+                        variable "server_port" {
+                            description = "Port used for HTTP requests"
+                            type        = number
+                            default     = 8080
+                        }
+
+        After that:    updated where server_port is used
+
+    In aws_security_group:    
+
+    ingress {                                                                       
+        from_port   = 8080   -------------------------> var.server_port                                                       
+        to_port     = 8080   -------------------------> var.server_port                                                                  
+        protocol    = "tcp"                                                                     
+        cidr_blocks = ["0.0.0.0/0"]                                                             
+        }                                                                                                   
+    }                                                                                                       
+                                
+    In user_data:
+    nohup python3 -m http.server 8080 ----------->  nohup python3 -m http.server ${var.server_port}  
 
 
 
