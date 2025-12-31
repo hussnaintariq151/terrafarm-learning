@@ -1,0 +1,89 @@
+
+1. Install choco (terrafarm installer)
+        Command Prompt  ----> Run as administrator ----> Run this command
+
+        @"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+
+    "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" =Launch PowerShell
+    Set-ExecutionPolicy Bypass -Scope Process -Force=Allow script execution
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))=Download & run Chocolatey installer
+
+2. Verify Choco  -------> choco --version
+
+3. Install terrafarm ------> choco install terraform -y
+4. Verify terrafarm  ------> terraform version
+
+5. AWS IAM user create and set up AWS Acces key and secret key
+        $env:AWS_ACCESS_KEY_ID="--------------------"
+        $env:AWS_SECRET_ACCESS_KEY="--------------------------------"
+6. then main.tf create
+Use Cloud : aws 
+                    provider "aws" {
+                        region = "us-east-2"-----> data centre || Availability zones 
+                    }
+7. For each provider, many resources: 
+        resource "<PROVIDER>_<TYPE>" "<NAME>"{
+            [CONFIG ....]
+        }
+
+Since( aws_instance ) "<PROVIDER>_<TYPE>"  <NAME>
+                aws is the name of a provider 
+                Type of resource you create in the provider
+                <NAME> = identifier to refer to this resource (aws_instance)
+
+                CONFIG are the arguements that are specific to the resource 
+
+                    ami = Amazon machine image to run on the EC2 instance
+                        we can find free or paid in Amazon Marketplace
+                        We create custom through tools like packer
+                    instance_type 
+                        It provdes a dfferent amount of CPU, memory, dsk space, and networkng capacty
+                        t2.micro, w c as one vrtual CPU, 1 GB of memory, and part of t e AWS Free Tier.
+
+8 - terraform init ---> it download plugin 
+
+9   terraform plan   what Terraform wll do when you execute terraform apply.
+                     it is dry-run, & for safe preview
+
+10  terraform apply  
+
+11 GO to AWS EC2 ----> Instance -----> Change the region to us-east-2 (the same which I allocate to provider)
+
+12 To track the story of all infrastructure changes
+            git add main.tf terraform.lock.hcl 
+            git commit -m"Initial commit"
+            git push 
+
+13 Move forward to deploy a web server 
+                                                        echo "Hello, World" > index.xhtml 
+we pass the data to EC2 instance through two way:
+        One through linux
+            wsl --install
+            nohup busybox httpd -f -p 8080
+
+        Second through main.tf
+
+                user_data = <<-EOF
+                #!/bin/bash
+                echo "Hello World!" > index.html
+                nohup busybox httpd -f -p 8080
+                EOF
+    
+    user_data_replace_on_change = true
+
+                          =<<-EOF 
+
+
+                
+                EOF 
+
+        Terraform herodoc syntax which allows to create multilingual strings without insert /n character all over the place
+
+        Te user_data_replace_on_change parameter s set to true so when you change the user_data parameter and run terraform apply,
+        Terraform wll termnate the orgnal instance and launch a totally newone.
+
+        
+
+
+
+
