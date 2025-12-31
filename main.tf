@@ -31,7 +31,34 @@ resource "aws_security_group" "instance" {
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
         }
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+        }
     } 
+
+# Security Group for ALB
+resource "aws_security_group" "alb" {
+    name    = "terraform-example-alb"
+    vpc_id  = data.aws_vpc.default.id
+
+    ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+        }
+
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+        }
+    }
+
 
 
 # Launch template
@@ -53,6 +80,45 @@ resource "aws_launch_template" "example" {
     }
 }
 
+# Application Load Balancer
+resource "aws_lb" "example" {
+  name               = "terraform-asg-example"
+  load_balancer_type = "application"
+  subnets            = data.aws_subnets.default.ids
+  security_groups    = [aws_security_group.alb.id]
+}
+
+# Listener for ALB
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.example.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.asg.arn
+  }
+}
+
+# Target Group for ASG
+resource "aws_lb_target_group" "asg" {
+  name     = "terraform-asg-example"
+  port     = var.server_port
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 3
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "example" {
@@ -66,11 +132,19 @@ resource "aws_autoscaling_group" "example" {
     min_size       = 2
     max_size       = 10
 
+    target_group_arns = [aws_lb_target_group.asg.arn]
+    health_check_type = "ELB"
+
     tag {
         key                  = "Name"
         value                = "terraform-asg-example"
         propagate_at_launch  =  true
     }
+}
+
+output "alb_dns_name" {
+  value       = aws_lb.example.dns_name
+  description = "DNS name of the Application Load Balancer"
 }
 
     
